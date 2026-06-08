@@ -1,0 +1,42 @@
+import { Router as ExpressRouter } from "express";
+import authRoutes from "../Features/auth/routes/auth.routes";
+import organizationRoutes from "../Features/organization/routes/organization.routes";
+import academicRoutes from "../Features/academic/routes/academic.routes";
+import materialRoutes from "../Features/material/routes/material.routes";
+import lessonRoutes from "../Features/lesson/routes/lesson.routes";
+import quizRoutes from "../Features/quiz/routes/quiz.routes";
+import chatRoutes from "../Features/chat/routes/chat.routes";
+import progressRoutes from "../Features/progress/routes/progress.routes";
+import searchRoutes from "../Features/search/routes/search.routes";
+import analyticsRoutes from "../Features/analytics/routes/analytics.routes";
+import notificationRoutes from "../Features/notification/routes/notification.routes";
+import usageRoutes from "../Features/usage/routes/usage.routes";
+import jobsRoutes from "./jobs.routes";
+import teacherPortalRoutes from "../Features/portals/teacher/teacherPortal.routes";
+import studentPortalRoutes from "../Features/portals/student/studentPortal.routes";
+import parentPortalRoutes from "../Features/portals/parent/parentPortal.routes";
+import orgPortalRoutes from "../Features/portals/organization/orgPortal.routes";
+import auditRoutes from "../Features/audit/routes/audit.routes";
+
+const Router = ExpressRouter();
+
+Router.use("/auth", authRoutes);
+Router.use("/organizations", organizationRoutes);
+Router.use("/organizations/:organizationId/academic", academicRoutes);
+Router.use("/materials", materialRoutes);
+Router.use("/lessons", lessonRoutes);
+Router.use("/quizzes", quizRoutes);
+Router.use("/chat", chatRoutes);
+Router.use("/progress", progressRoutes);
+Router.use("/search", searchRoutes);
+Router.use("/analytics", analyticsRoutes);
+Router.use("/notifications", notificationRoutes);
+Router.use("/usage", usageRoutes);
+Router.use("/jobs", jobsRoutes);
+Router.use("/teacher", teacherPortalRoutes);
+Router.use("/student", studentPortalRoutes);
+Router.use("/parent", parentPortalRoutes);
+Router.use("/organization", orgPortalRoutes);
+Router.use("/audit", auditRoutes);
+
+export { Router };

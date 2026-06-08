@@ -1,0 +1,2006 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AI Tutor API",
+    "version": "1.0.0",
+    "description": "AI-powered learning platform backend API.\n\n**Modules:** Auth, Organizations, Academic Structure, Materials, Lessons, Flashcards, Quizzes, Chat (RAG), Progress, Analytics, Search, Notifications, Usage, Jobs\n\n**Response format:** `{ success, message, data }`"
+  },
+  "servers": [{ "url": "http://localhost:7001", "description": "Development" }],
+  "tags": [
+    { "name": "Health", "description": "Health and readiness checks" },
+    { "name": "Auth", "description": "Authentication and user profile" },
+    { "name": "Organizations", "description": "School and organization management" },
+    { "name": "Academic", "description": "Academic year, term, subject, and topic hierarchy" },
+    { "name": "Materials", "description": "Material upload and AI processing pipeline" },
+    { "name": "Lessons", "description": "AI-generated lessons from materials" },
+    { "name": "Flashcards", "description": "AI-generated flashcards from lessons" },
+    { "name": "Quizzes", "description": "AI-generated quizzes from lessons" },
+    { "name": "Chat", "description": "RAG-powered contextual AI tutor chat" },
+    { "name": "Progress", "description": "Student progress tracking and spaced repetition" },
+    { "name": "Analytics", "description": "Student, teacher, and organization analytics" },
+    { "name": "Search", "description": "Global search across learning content" },
+    { "name": "Notifications", "description": "In-app notifications" },
+    { "name": "Usage", "description": "AI usage and quota tracking" },
+    { "name": "Jobs", "description": "Background job monitoring" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Service is running",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Readiness check",
+        "description": "Returns 503 if database is disconnected.",
+        "responses": {
+          "200": { "description": "Service is ready" },
+          "503": { "description": "Service not ready" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a new user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/AuthResponse" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": { "description": "Email already registered" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/AuthResponse" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Refresh access token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RefreshTokenRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token refreshed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/AuthTokens" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout and revoke refresh token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RefreshTokenRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Logged out successfully" }
+        }
+      }
+    },
+    "/auth/forgot-password": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Request password reset email",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Reset email sent if account exists" }
+        }
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Reset password with token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["token", "newPassword"],
+                "properties": {
+                  "token": { "type": "string" },
+                  "newPassword": { "type": "string", "minLength": 8 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Password reset successful" },
+          "400": { "description": "Invalid or expired token" }
+        }
+      }
+    },
+    "/auth/profile": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current user profile",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Profile retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/SafeUser" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Auth"],
+        "summary": "Update current user profile",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "firstName": { "type": "string" },
+                  "lastName": { "type": "string" },
+                  "avatar": { "type": "string", "format": "uri" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Profile updated" }
+        }
+      }
+    },
+    "/auth/change-password": {
+      "patch": {
+        "tags": ["Auth"],
+        "summary": "Change password",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["currentPassword", "newPassword"],
+                "properties": {
+                  "currentPassword": { "type": "string" },
+                  "newPassword": { "type": "string", "minLength": 8 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Password changed successfully" }
+        }
+      }
+    },
+    "/organizations": {
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Create a new organization",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Springfield High School" },
+                  "logo": { "type": "string", "format": "uri" },
+                  "subscriptionPlan": {
+                    "type": "string",
+                    "enum": ["FREE", "BASIC", "PRO", "ENTERPRISE"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Organization created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/Organization" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "List organizations",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Organizations retrieved" }
+        }
+      }
+    },
+    "/organizations/{id}": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "Get organization by ID",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Organization retrieved" },
+          "404": { "description": "Organization not found" }
+        }
+      },
+      "patch": {
+        "tags": ["Organizations"],
+        "summary": "Update organization",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "logo": { "type": "string", "format": "uri" },
+                  "subscriptionPlan": {
+                    "type": "string",
+                    "enum": ["FREE", "BASIC", "PRO", "ENTERPRISE"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Organization updated" }
+        }
+      },
+      "delete": {
+        "tags": ["Organizations"],
+        "summary": "Soft delete organization",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Organization deleted" }
+        }
+      }
+    },
+    "/organizations/{id}/members": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "List organization members",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Members retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/OrganizationMember" }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Add member to organization",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["userId", "role"],
+                "properties": {
+                  "userId": { "type": "string" },
+                  "role": {
+                    "type": "string",
+                    "enum": ["TEACHER", "STUDENT", "PARENT"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Member added" }
+        }
+      }
+    },
+    "/organizations/{id}/members/{userId}": {
+      "delete": {
+        "tags": ["Organizations"],
+        "summary": "Remove member from organization",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Member removed" }
+        }
+      }
+    },
+    "/organizations/{id}/members/{userId}/suspend": {
+      "patch": {
+        "tags": ["Organizations"],
+        "summary": "Suspend organization member",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Member suspended" }
+        }
+      }
+    },
+    "/organizations/{id}/invites": {
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Invite member by email",
+        "description": "Sends an invitation email with a token link. Requires SCHOOL_ADMIN or SUPER_ADMIN.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "role"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "role": { "type": "string", "enum": ["TEACHER", "STUDENT", "PARENT"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Invitation sent" }
+        }
+      }
+    },
+    "/organizations/invites/accept": {
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Accept organization invitation",
+        "description": "Public endpoint. Creates account if new user, or links existing account.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["token"],
+                "properties": {
+                  "token": { "type": "string" },
+                  "firstName": { "type": "string", "description": "Required for new accounts" },
+                  "lastName": { "type": "string", "description": "Required for new accounts" },
+                  "password": { "type": "string", "minLength": 8, "description": "Required for new accounts" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Invitation accepted" },
+          "400": { "description": "Invalid or expired token" }
+        }
+      }
+    },
+    "/organizations/{id}/parent-links": {
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Link parent to student",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["parentId", "studentId"],
+                "properties": {
+                  "parentId": { "type": "string" },
+                  "studentId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Parent linked to student" }
+        }
+      }
+    },
+    "/organizations/{id}/assignments/teacher": {
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Assign teacher to subject",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["subjectId", "teacherId"],
+                "properties": {
+                  "subjectId": { "type": "string" },
+                  "teacherId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Teacher assigned" }
+        }
+      }
+    },
+    "/organizations/{id}/assignments/student": {
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Enroll student in subject",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["subjectId", "studentId"],
+                "properties": {
+                  "subjectId": { "type": "string" },
+                  "studentId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Student enrolled" }
+        }
+      }
+    },
+    "/organizations/{organizationId}/academic/years": {
+      "post": {
+        "tags": ["Academic"],
+        "summary": "Create academic year",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "startDate", "endDate"],
+                "properties": {
+                  "name": { "type": "string", "example": "2025-2026" },
+                  "startDate": { "type": "string", "format": "date" },
+                  "endDate": { "type": "string", "format": "date" },
+                  "isCurrent": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Academic year created" } }
+      },
+      "get": {
+        "tags": ["Academic"],
+        "summary": "List academic years",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Academic years retrieved" } }
+      }
+    },
+    "/organizations/{organizationId}/academic/terms": {
+      "post": {
+        "tags": ["Academic"],
+        "summary": "Create term/semester",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["academicYearId", "name", "startDate", "endDate"],
+                "properties": {
+                  "academicYearId": { "type": "string" },
+                  "name": { "type": "string", "example": "Fall Semester" },
+                  "startDate": { "type": "string", "format": "date" },
+                  "endDate": { "type": "string", "format": "date" },
+                  "order": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Term created" } }
+      }
+    },
+    "/organizations/{organizationId}/academic/years/{yearId}/terms": {
+      "get": {
+        "tags": ["Academic"],
+        "summary": "List terms for an academic year",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "yearId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Terms retrieved" } }
+      }
+    },
+    "/organizations/{organizationId}/academic/subjects": {
+      "post": {
+        "tags": ["Academic"],
+        "summary": "Create subject",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["academicYearId", "name"],
+                "properties": {
+                  "academicYearId": { "type": "string" },
+                  "termId": { "type": "string" },
+                  "name": { "type": "string", "example": "Biology" },
+                  "code": { "type": "string", "example": "BIO101" },
+                  "description": { "type": "string" },
+                  "order": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Subject created" } }
+      },
+      "get": {
+        "tags": ["Academic"],
+        "summary": "List subjects",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "academicYearId", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Subjects retrieved" } }
+      }
+    },
+    "/organizations/{organizationId}/academic/topics": {
+      "post": {
+        "tags": ["Academic"],
+        "summary": "Create topic",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["subjectId", "name"],
+                "properties": {
+                  "subjectId": { "type": "string" },
+                  "name": { "type": "string", "example": "Cell Structure" },
+                  "description": { "type": "string" },
+                  "order": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Topic created" } }
+      }
+    },
+    "/organizations/{organizationId}/academic/subjects/{subjectId}/topics": {
+      "get": {
+        "tags": ["Academic"],
+        "summary": "List topics for a subject",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "subjectId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Topics retrieved" } }
+      }
+    },
+    "/organizations/{organizationId}/academic/subjects/{subjectId}/topics/reorder": {
+      "patch": {
+        "tags": ["Academic"],
+        "summary": "Reorder topics within a subject",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "subjectId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["orderedIds"],
+                "properties": {
+                  "orderedIds": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Topic IDs in desired order"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Topics reordered" } }
+      }
+    },
+    "/materials/upload/pdf": {
+      "post": {
+        "tags": ["Materials"],
+        "summary": "Upload a PDF material",
+        "description": "Uploads PDF to Cloudflare R2 and queues async AI processing (extract → chunk → embed → Qdrant index).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file", "organizationId", "topicId", "title"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary", "description": "PDF file (max 50MB)" },
+                  "organizationId": { "type": "string" },
+                  "topicId": { "type": "string", "description": "Topic this material belongs to" },
+                  "title": { "type": "string", "example": "Biology Chapter 3" },
+                  "description": { "type": "string" },
+                  "subjectName": { "type": "string", "example": "Biology" },
+                  "tags": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "PDF uploaded — processing queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/Material" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": { "description": "R2 storage or Redis queue unavailable" }
+        }
+      }
+    },
+    "/materials/upload/text": {
+      "post": {
+        "tags": ["Materials"],
+        "summary": "Upload text content as material",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["organizationId", "topicId", "title", "content"],
+                "properties": {
+                  "organizationId": { "type": "string" },
+                  "topicId": { "type": "string" },
+                  "title": { "type": "string", "example": "Photosynthesis Notes" },
+                  "content": { "type": "string", "example": "Photosynthesis is the process..." },
+                  "description": { "type": "string" },
+                  "subjectName": { "type": "string" },
+                  "tags": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Text uploaded — processing queued" }
+        }
+      }
+    },
+    "/materials/youtube": {
+      "post": {
+        "tags": ["Materials"],
+        "summary": "Add a YouTube video as material",
+        "description": "Fetches video transcript in background and queues AI processing.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["organizationId", "topicId", "title", "youtubeUrl"],
+                "properties": {
+                  "organizationId": { "type": "string" },
+                  "topicId": { "type": "string" },
+                  "title": { "type": "string", "example": "Khan Academy - Algebra" },
+                  "youtubeUrl": {
+                    "type": "string",
+                    "example": "https://www.youtube.com/watch?v=VIDEO_ID"
+                  },
+                  "description": { "type": "string" },
+                  "subjectName": { "type": "string" },
+                  "tags": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "YouTube link added — processing queued" }
+        }
+      }
+    },
+    "/materials": {
+      "get": {
+        "tags": ["Materials"],
+        "summary": "List materials for an organization",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "topicId", "in": "query", "schema": { "type": "string" } },
+          { "name": "subjectId", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          {
+            "name": "processingStatus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["PENDING", "QUEUED", "PROCESSING", "COMPLETED", "FAILED"]
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["PDF", "TEXT", "YOUTUBE"] }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Materials retrieved" }
+        }
+      }
+    },
+    "/materials/{id}": {
+      "get": {
+        "tags": ["Materials"],
+        "summary": "Get material by ID",
+        "description": "Returns metadata including processingStatus, summary, and chunkCount.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Material retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/Material" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Materials"],
+        "summary": "Delete material and associated vectors",
+        "description": "Soft-deletes material, removes R2 file and Qdrant vectors.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Material deleted" }
+        }
+      }
+    },
+    "/materials/{id}/chunks": {
+      "get": {
+        "tags": ["Materials"],
+        "summary": "Get processed text chunks",
+        "description": "Available after processingStatus is COMPLETED.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chunks retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/MaterialChunk" }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": { "description": "Processing not complete" }
+        }
+      }
+    },
+    "/materials/{id}/reprocess": {
+      "post": {
+        "tags": ["Materials"],
+        "summary": "Re-queue material for AI processing",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Reprocessing queued" }
+        }
+      }
+    },
+    "/materials/{id}/archive": {
+      "patch": {
+        "tags": ["Materials"],
+        "summary": "Archive material",
+        "description": "Sets material status to INACTIVE without deleting vectors.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Material archived" }
+        }
+      }
+    },
+    "/materials/{id}/processing-logs": {
+      "get": {
+        "tags": ["Materials"],
+        "summary": "Get material processing logs",
+        "description": "Returns stage-by-stage processing history (UPLOADED → CHUNKING → EMBEDDING → etc.).",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Processing logs retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/MaterialProcessingLog" }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lessons/generate": {
+      "post": {
+        "tags": ["Lessons"],
+        "summary": "Generate lesson from selected materials",
+        "description": "Teacher selects 1–10 processed materials from a topic. AI synthesizes a lesson, then auto-queues flashcards and quiz.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["topicId", "materialIds"],
+                "properties": {
+                  "topicId": { "type": "string" },
+                  "materialIds": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1,
+                    "maxItems": 10
+                  },
+                  "title": { "type": "string" },
+                  "order": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Lesson generation queued" }
+        }
+      }
+    },
+    "/lessons": {
+      "get": {
+        "tags": ["Lessons"],
+        "summary": "List lessons",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "topicId", "in": "query", "schema": { "type": "string" } },
+          { "name": "subjectId", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Lessons retrieved" }
+        }
+      }
+    },
+    "/lessons/{id}": {
+      "get": {
+        "tags": ["Lessons"],
+        "summary": "Get lesson by ID",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Lesson retrieved" }
+        }
+      },
+      "delete": {
+        "tags": ["Lessons"],
+        "summary": "Delete lesson",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Lesson deleted" }
+        }
+      }
+    },
+    "/lessons/{id}/regenerate": {
+      "post": {
+        "tags": ["Lessons"],
+        "summary": "Regenerate lesson content",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Regeneration queued" }
+        }
+      }
+    },
+    "/lessons/{lessonId}/flashcards/generate": {
+      "post": {
+        "tags": ["Flashcards"],
+        "summary": "Regenerate flashcards for a lesson",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "lessonId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Flashcard generation queued" }
+        }
+      }
+    },
+    "/lessons/{lessonId}/flashcards": {
+      "get": {
+        "tags": ["Flashcards"],
+        "summary": "List flashcards for a lesson",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "lessonId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Flashcards retrieved" }
+        }
+      }
+    },
+    "/lessons/{lessonId}/quiz/generate": {
+      "post": {
+        "tags": ["Quizzes"],
+        "summary": "Regenerate quiz for a lesson",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "lessonId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Quiz generation queued" }
+        }
+      }
+    },
+    "/lessons/{lessonId}/quiz": {
+      "get": {
+        "tags": ["Quizzes"],
+        "summary": "Get quiz metadata for a lesson",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "lessonId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Quiz retrieved" }
+        }
+      }
+    },
+    "/lessons/{lessonId}/quiz/questions": {
+      "get": {
+        "tags": ["Quizzes"],
+        "summary": "Get quiz questions for a lesson",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "lessonId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Questions retrieved" }
+        }
+      }
+    },
+    "/quizzes/{id}": {
+      "get": {
+        "tags": ["Quizzes"],
+        "summary": "Get quiz with questions",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "includeAnswers", "in": "query", "schema": { "type": "boolean" } }
+        ],
+        "responses": {
+          "200": { "description": "Quiz with questions retrieved" }
+        }
+      }
+    },
+    "/chat/sessions": {
+      "post": {
+        "tags": ["Chat"],
+        "summary": "Create a contextual chat session",
+        "description": "Scope chat by providing only the IDs you need. Invalid or placeholder values are ignored. contextType is inferred from the most specific ID provided.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["organizationId"],
+                "properties": {
+                  "organizationId": { "type": "string" },
+                  "contextType": {
+                    "type": "string",
+                    "enum": ["ORGANIZATION", "ACADEMIC_YEAR", "SUBJECT", "TOPIC", "MATERIAL", "LESSON"],
+                    "description": "Optional. Inferred from scope IDs when omitted."
+                  },
+                  "academicYearId": { "type": "string", "description": "Optional scope filter" },
+                  "subjectId": { "type": "string", "description": "Optional scope filter" },
+                  "topicId": { "type": "string", "description": "Optional scope filter" },
+                  "materialId": { "type": "string", "description": "Optional scope filter" },
+                  "lessonId": { "type": "string", "description": "Optional scope filter" },
+                  "title": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Session created" } }
+      },
+      "get": {
+        "tags": ["Chat"],
+        "summary": "List chat sessions",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Sessions retrieved" } }
+      }
+    },
+    "/chat/sessions/{sessionId}": {
+      "get": {
+        "tags": ["Chat"],
+        "summary": "Get chat session with message history",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Session retrieved" } }
+      },
+      "delete": {
+        "tags": ["Chat"],
+        "summary": "Delete chat session",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Session deleted" } }
+      }
+    },
+    "/chat/sessions/{sessionId}/messages": {
+      "post": {
+        "tags": ["Chat"],
+        "summary": "Send a message (RAG-powered response)",
+        "description": "Retrieves relevant chunks from Qdrant, injects into AI prompt, returns grounded answer with sources.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["message"],
+                "properties": {
+                  "message": { "type": "string", "example": "Explain photosynthesis in simple terms" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "AI response with source citations" } }
+      }
+    },
+    "/progress/dashboard": {
+      "get": {
+        "tags": ["Progress"],
+        "summary": "Get student progress dashboard",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "userId", "in": "query", "schema": { "type": "string" }, "description": "Teachers/admins can view other students" }
+        ],
+        "responses": { "200": { "description": "Dashboard retrieved" } }
+      }
+    },
+    "/progress/lessons": {
+      "get": {
+        "tags": ["Progress"],
+        "summary": "List lesson progress records",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Lesson progress retrieved" } }
+      }
+    },
+    "/progress/lessons/{lessonId}": {
+      "patch": {
+        "tags": ["Progress"],
+        "summary": "Update lesson progress",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "lessonId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "progressPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+                  "timeSpentMinutes": { "type": "integer" },
+                  "markComplete": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Progress updated" } }
+      }
+    },
+    "/progress/quiz-attempts": {
+      "post": {
+        "tags": ["Progress"],
+        "summary": "Submit a quiz attempt",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["quizId", "answers"],
+                "properties": {
+                  "quizId": { "type": "string" },
+                  "timeSpentSeconds": { "type": "integer" },
+                  "answers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "questionId": { "type": "string" },
+                        "answer": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Attempt graded and recorded" } }
+      }
+    },
+    "/progress/flashcard-reviews": {
+      "post": {
+        "tags": ["Progress"],
+        "summary": "Record a flashcard review",
+        "description": "Records review and updates spaced repetition schedule (SM-2 inspired).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["flashcardId", "result"],
+                "properties": {
+                  "flashcardId": { "type": "string" },
+                  "result": { "type": "string", "enum": ["CORRECT", "INCORRECT"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Review recorded" } }
+      }
+    },
+    "/progress/flashcards/due": {
+      "get": {
+        "tags": ["Progress"],
+        "summary": "Get flashcards due for review",
+        "description": "Returns flashcards whose nextReviewAt is in the past, ordered by urgency.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "Due flashcards retrieved" } }
+      }
+    },
+    "/search": {
+      "get": {
+        "tags": ["Search"],
+        "summary": "Global search across learning content",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string", "minLength": 2 } },
+          {
+            "name": "types",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Comma-separated: lessons,materials,flashcards,quizzes,topics,subjects"
+          },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": { "200": { "description": "Search results retrieved" } }
+      }
+    },
+    "/analytics/student": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Student analytics dashboard",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "studentId", "in": "query", "schema": { "type": "string" }, "description": "Teachers/parents can view linked students" }
+        ],
+        "responses": { "200": { "description": "Student analytics retrieved" } }
+      }
+    },
+    "/analytics/teacher": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Teacher analytics",
+        "description": "Class performance, difficult lessons, struggling students.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Teacher analytics retrieved" } }
+      }
+    },
+    "/analytics/organization/{organizationId}": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Organization analytics",
+        "description": "Active students, materials, AI usage, lesson completion. Requires SCHOOL_ADMIN.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Organization analytics retrieved" } }
+      }
+    },
+    "/analytics/flashcards/retention": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Flashcard retention stats",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Retention stats retrieved" } }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "List notifications for current user",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "unreadOnly", "in": "query", "schema": { "type": "boolean" } }
+        ],
+        "responses": { "200": { "description": "Notifications retrieved" } }
+      }
+    },
+    "/notifications/read-all": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark all notifications as read",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "All notifications marked as read" } }
+      }
+    },
+    "/notifications/{id}/read": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark notification as read",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Notification marked as read" } }
+      }
+    },
+    "/usage/{organizationId}": {
+      "get": {
+        "tags": ["Usage"],
+        "summary": "Get AI usage summary",
+        "description": "Monthly token/request usage vs plan limits. Requires SCHOOL_ADMIN.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Usage summary retrieved" },
+          "429": { "description": "Monthly limit reached" }
+        }
+      }
+    },
+    "/jobs/queues": {
+      "get": {
+        "tags": ["Jobs"],
+        "summary": "List available job queues",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Queues listed" } }
+      }
+    },
+    "/jobs/{jobId}": {
+      "get": {
+        "tags": ["Jobs"],
+        "summary": "Get background job status",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "jobId", "in": "path", "required": true, "schema": { "type": "string" } },
+          {
+            "name": "queue",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "enum": ["material-processing", "ai-generation"] }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Job status retrieved" },
+          "404": { "description": "Job not found" }
+        }
+      }
+    },
+    "/jobs/failed": {
+      "get": {
+        "tags": ["Jobs"],
+        "summary": "List failed jobs in a queue",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "queue", "in": "query", "schema": { "type": "string", "enum": ["material-processing", "ai-generation"] } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50 } }
+        ],
+        "responses": { "200": { "description": "Failed jobs listed" } }
+      }
+    },
+    "/audit": {
+      "get": {
+        "tags": ["Audit"],
+        "summary": "List organization audit logs",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Audit logs retrieved" } }
+      }
+    },
+    "/lessons/{id}/sources": {
+      "get": {
+        "tags": ["Lessons"],
+        "summary": "List source materials for a lesson",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Lesson sources retrieved" } }
+      }
+    },
+    "/teacher/dashboard": {
+      "get": {
+        "tags": ["Teacher Portal"],
+        "summary": "Teacher dashboard summary",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Dashboard retrieved" } }
+      }
+    },
+    "/teacher/subjects": { "get": { "tags": ["Teacher Portal"], "summary": "Teacher subjects", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/teacher/topics": { "get": { "tags": ["Teacher Portal"], "summary": "Teacher topics", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }, { "name": "subjectId", "in": "query", "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/teacher/lessons": { "get": { "tags": ["Teacher Portal"], "summary": "Teacher lessons with metrics", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/teacher/materials": { "get": { "tags": ["Teacher Portal"], "summary": "Teacher materials with processing status", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/teacher/students": { "get": { "tags": ["Teacher Portal"], "summary": "List students", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/teacher/students/{id}": { "get": { "tags": ["Teacher Portal"], "summary": "Student detail", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/student/dashboard": { "get": { "tags": ["Student Portal"], "summary": "Student dashboard", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/student/continue-learning": { "get": { "tags": ["Student Portal"], "summary": "Continue learning", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/student/lessons": { "get": { "tags": ["Student Portal"], "summary": "Assigned lessons", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/student/lessons/{id}": { "get": { "tags": ["Student Portal"], "summary": "Lesson detail with flashcards and quiz", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/student/lessons/{id}/complete": { "post": { "tags": ["Student Portal"], "summary": "Mark lesson complete", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/student/flashcards/review": { "get": { "tags": ["Student Portal"], "summary": "Due flashcards", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/student/chat": { "post": { "tags": ["Student Portal"], "summary": "Send tutor message (optional sessionId)", "security": [{ "bearerAuth": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["organizationId", "message"], "properties": { "organizationId": { "type": "string" }, "message": { "type": "string" }, "sessionId": { "type": "string" }, "lessonId": { "type": "string" } } } } } }, "responses": { "200": { "description": "OK" } } } },
+    "/student/recommendations": { "get": { "tags": ["Student Portal"], "summary": "AI recommendations", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/student/learning-path": { "get": { "tags": ["Student Portal"], "summary": "Ordered learning path", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/parent/dashboard": { "get": { "tags": ["Parent Portal"], "summary": "Parent dashboard", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/parent/students/{id}/progress": { "get": { "tags": ["Parent Portal"], "summary": "Child progress", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/organization/dashboard": { "get": { "tags": ["Organization Portal"], "summary": "Org admin dashboard", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/organization/usage": { "get": { "tags": ["Organization Portal"], "summary": "AI and storage usage", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } },
+    "/organization/subscription": { "get": { "tags": ["Organization Portal"], "summary": "Subscription and billing readiness", "security": [{ "bearerAuth": [] }], "parameters": [{ "name": "organizationId", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } } }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter JWT access token from /auth/login"
+      }
+    },
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Success" },
+          "data": { "type": "object" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string", "example": "Error message" },
+          "error": { "type": "object" }
+        }
+      },
+      "AuthTokens": {
+        "type": "object",
+        "properties": {
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" }
+        }
+      },
+      "SafeUser": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "firstName": { "type": "string" },
+          "lastName": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "role": {
+            "type": "string",
+            "enum": ["SUPER_ADMIN", "SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]
+          },
+          "status": { "type": "string" },
+          "avatar": { "type": "string" },
+          "organizationId": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "user": { "$ref": "#/components/schemas/SafeUser" },
+          "tokens": { "$ref": "#/components/schemas/AuthTokens" }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["firstName", "lastName", "email", "password"],
+        "properties": {
+          "firstName": { "type": "string", "example": "Jane" },
+          "lastName": { "type": "string", "example": "Doe" },
+          "email": { "type": "string", "format": "email", "example": "awinsamp@yahoo.com" },
+          "password": { "type": "string", "minLength": 8, "example": "password123" },
+          "role": {
+            "type": "string",
+            "enum": ["STUDENT"],
+            "description": "Self-registration only allows STUDENT. Staff require invite."
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "awinsamp@yahoo.com" },
+          "password": { "type": "string" ,"example": "password123"}
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "required": ["refreshToken"],
+        "properties": {
+          "refreshToken": { "type": "string" }
+        }
+      },
+      "Organization": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "logo": { "type": "string" },
+          "subscriptionPlan": {
+            "type": "string",
+            "enum": ["FREE", "BASIC", "PRO", "ENTERPRISE"]
+          },
+          "ownerId": { "type": "string" },
+          "teachers": { "type": "array", "items": { "type": "string" } },
+          "students": { "type": "array", "items": { "type": "string" } },
+          "parents": { "type": "array", "items": { "type": "string" } },
+          "status": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Material": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "organizationId": { "type": "string" },
+          "topicId": { "type": "string" },
+          "subjectId": { "type": "string" },
+          "academicYearId": { "type": "string" },
+          "uploadedBy": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "type": { "type": "string", "enum": ["PDF", "TEXT", "YOUTUBE"] },
+          "processingStatus": {
+            "type": "string",
+            "enum": ["PENDING", "QUEUED", "PROCESSING", "COMPLETED", "FAILED"]
+          },
+          "processingStage": {
+            "type": "string",
+            "enum": ["UPLOADED", "PROCESSING", "CHUNKING", "EMBEDDING", "GENERATING", "COMPLETED", "FAILED"],
+            "description": "Detailed pipeline stage for processing tracking"
+          },
+          "fileName": { "type": "string" },
+          "mimeType": { "type": "string" },
+          "fileSize": { "type": "number" },
+          "r2Url": { "type": "string" },
+          "sourceUrl": { "type": "string" },
+          "summary": { "type": "string" },
+          "chunkCount": { "type": "number" },
+          "errorMessage": { "type": "string" },
+          "jobId": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "subjectName": { "type": "string" },
+          "processingStartedAt": { "type": "string", "format": "date-time" },
+          "processingCompletedAt": { "type": "string", "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "MaterialChunk": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "chunkIndex": { "type": "number" },
+          "content": { "type": "string" },
+          "startChar": { "type": "number" },
+          "endChar": { "type": "number" }
+        }
+      },
+      "Lesson": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "organizationId": { "type": "string" },
+          "topicId": { "type": "string" },
+          "subjectId": { "type": "string" },
+          "academicYearId": { "type": "string" },
+          "createdBy": { "type": "string" },
+          "title": { "type": "string" },
+          "summary": { "type": "string" },
+          "objectives": { "type": "array", "items": { "type": "string" } },
+          "concepts": { "type": "array", "items": { "type": "string" } },
+          "examples": { "type": "array", "items": { "type": "string" } },
+          "references": { "type": "array", "items": { "type": "string" } },
+          "content": { "type": "string" },
+          "order": { "type": "integer" },
+          "materials": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "title": { "type": "string" },
+                "type": { "type": "string" },
+                "order": { "type": "integer" }
+              }
+            }
+          },
+          "generationStatus": {
+            "type": "string",
+            "enum": ["PENDING", "QUEUED", "PROCESSING", "COMPLETED", "FAILED"]
+          },
+          "flashcardsGenerated": { "type": "boolean" },
+          "quizGenerated": { "type": "boolean" }
+        }
+      },
+      "Flashcard": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "lessonId": { "type": "string" },
+          "question": { "type": "string" },
+          "answer": { "type": "string" },
+          "difficulty": { "type": "string", "enum": ["EASY", "MEDIUM", "HARD"] },
+          "order": { "type": "number" }
+        }
+      },
+      "Quiz": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "lessonId": { "type": "string" },
+          "title": { "type": "string" },
+          "questionCount": { "type": "number" },
+          "generationStatus": {
+            "type": "string",
+            "enum": ["PENDING", "QUEUED", "PROCESSING", "COMPLETED", "FAILED"]
+          }
+        }
+      },
+      "QuizQuestion": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "enum": ["MCQ", "TRUE_FALSE", "FILL_BLANK"] },
+          "question": { "type": "string" },
+          "options": { "type": "array", "items": { "type": "string" } },
+          "correctAnswer": { "type": "string" },
+          "explanation": { "type": "string" },
+          "difficulty": { "type": "string", "enum": ["EASY", "MEDIUM", "HARD"] },
+          "order": { "type": "number" }
+        }
+      },
+      "OrganizationMember": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "firstName": { "type": "string" },
+          "lastName": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "role": { "type": "string", "enum": ["SUPER_ADMIN", "SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"] },
+          "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "SUSPENDED", "DELETED"] },
+          "avatar": { "type": "string" },
+          "isOwner": { "type": "boolean" }
+        }
+      },
+      "MaterialProcessingLog": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "materialId": { "type": "string" },
+          "organizationId": { "type": "string" },
+          "stage": {
+            "type": "string",
+            "enum": ["UPLOADED", "PROCESSING", "CHUNKING", "EMBEDDING", "GENERATING", "COMPLETED", "FAILED"]
+          },
+          "message": { "type": "string" },
+          "metadata": { "type": "object" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "userId": { "type": "string" },
+          "organizationId": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["LESSON_ASSIGNED", "QUIZ_COMPLETED", "MATERIAL_PROCESSED", "REVISION_REMINDER", "INVITATION"]
+          },
+          "title": { "type": "string" },
+          "body": { "type": "string" },
+          "data": { "type": "object" },
+          "readAt": { "type": "string", "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AcademicYear": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "organizationId": { "type": "string" },
+          "name": { "type": "string" },
+          "startDate": { "type": "string", "format": "date-time" },
+          "endDate": { "type": "string", "format": "date-time" },
+          "isCurrent": { "type": "boolean" }
+        }
+      },
+      "Subject": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "organizationId": { "type": "string" },
+          "academicYearId": { "type": "string" },
+          "termId": { "type": "string" },
+          "name": { "type": "string" },
+          "code": { "type": "string" },
+          "description": { "type": "string" },
+          "teacherIds": { "type": "array", "items": { "type": "string" } },
+          "order": { "type": "integer" }
+        }
+      },
+      "Topic": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "organizationId": { "type": "string" },
+          "subjectId": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "order": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

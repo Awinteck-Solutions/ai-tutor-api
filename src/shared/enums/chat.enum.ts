@@ -1,0 +1,15 @@
+export enum ChatContextType {
+  ORGANIZATION = "ORGANIZATION",
+  ACADEMIC_YEAR = "ACADEMIC_YEAR",
+  SUBJECT = "SUBJECT",
+  TOPIC = "TOPIC",
+  MATERIAL = "MATERIAL",
+  LESSON = "LESSON",
+  QUIZ = "QUIZ",
+  FLASHCARD = "FLASHCARD",
+}
+
+export enum ChatMessageRole {
+  USER = "USER",
+  ASSISTANT = "ASSISTANT",
+}
