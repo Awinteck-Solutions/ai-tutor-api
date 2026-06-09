@@ -51,6 +51,8 @@ jobs:
             docker stop ai-tutor-api || true
             docker rm ai-tutor-api || true
             docker run -d -p 7072:7072 \
+             --network app-network \
+              --restart always \
               --name ai-tutor-api \
               --env-file envs/.env.ai-tutor \
               ${{ secrets.ECR_REGISTRY }}/awinteck-services:ai-tutor-api-${{ github.sha }}
