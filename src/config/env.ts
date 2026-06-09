@@ -12,7 +12,7 @@ function requireEnv(key: string, fallback?: string): string {
 
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
-  port: parseInt(process.env.PORT ?? "3000", 10),
+  port: parseInt(process.env.PORT ?? "7072", 10),
   apiBaseUrl: process.env.API_BASE_URL ?? "http://localhost:3000",
   frontendBaseUrl: process.env.FRONTEND_BASE_URL ?? "http://localhost:5173",
   dbUrl: requireEnv("DB_URL", "mongodb://localhost:27017/ai-tutor"),
