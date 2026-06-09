@@ -28,17 +28,17 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t api-ai-tutor:${{ github.sha }} .
+          docker build -t ai-tutor-api:${{ github.sha }} .
 
       - name: Tag image
         run: |
-          docker tag api-ai-tutor:${{ github.sha }} \
-          ${{ secrets.ECR_REGISTRY }}/awinteck-services:api-ai-tutor-${{ github.sha }}
+          docker tag ai-tutor-api:${{ github.sha }} \
+          ${{ secrets.ECR_REGISTRY }}/awinteck-services:ai-tutor-api-${{ github.sha }}
 
       - name: Push image to ECR
         run: |
           docker push \
-          ${{ secrets.ECR_REGISTRY }}/awinteck-services:api-ai-tutor-${{ github.sha }}
+          ${{ secrets.ECR_REGISTRY }}/awinteck-services:ai-tutor-api-${{ github.sha }}
 
       - name: Deploy on EC2
         uses: appleboy/ssh-action@v1
@@ -47,10 +47,10 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            docker pull ${{ secrets.ECR_REGISTRY }}/awinteck-services:api-ai-tutor-${{ github.sha }}
-            docker stop api-ai-tutor || true
-            docker rm api-ai-tutor || true
+            docker pull ${{ secrets.ECR_REGISTRY }}/awinteck-services:ai-tutor-api-${{ github.sha }}
+            docker stop ai-tutor-api || true
+            docker rm ai-tutor-api || true
             docker run -d -p 7072:7072 \
-              --name api-ai-tutor \
+              --name ai-tutor-api \
               --env-file envs/.env.ai-tutor \
-              ${{ secrets.ECR_REGISTRY }}/awinteck-services:api-ai-tutor-${{ github.sha }}
+              ${{ secrets.ECR_REGISTRY }}/awinteck-services:ai-tutor-api-${{ github.sha }}

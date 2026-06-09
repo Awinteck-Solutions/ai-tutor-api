@@ -20,3 +20,5 @@ public/
 
 # TypeScript compiled files
 *.tsbuildinfo
+
+not-deploy.yml
