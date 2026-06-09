@@ -70,7 +70,6 @@ export class LessonService {
     const materialOrder = new Map(
       input.materialIds.map((id, index) => [id, index])
     );
-console.log('input.title ?? materials[0].title', input.title?.trim().length , materials[0].title)
     const lesson = await Lesson.create({
       organizationId: placement.organizationId,
       topicId: placement.topicId,
@@ -78,6 +77,7 @@ console.log('input.title ?? materials[0].title', input.title?.trim().length , ma
       academicYearId: placement.academicYearId,
       createdBy: user.sub,
       title: input.title ? input.title.trim().length > 0 ? input.title.trim() : materials[0].title : materials[0].title,
+      studentLevel: input.studentLevel ?? "intermediate",
       order: input.order ?? 0,
       generationStatus: ProcessingStatus.PENDING,
     });
@@ -245,7 +245,8 @@ console.log('input.title ?? materials[0].title', input.title?.trim().length , ma
 
   static async regenerate(
     user: JwtPayload,
-    lessonId: string
+    lessonId: string,
+    input?: { studentLevel?: "beginner" | "intermediate" | "advanced" }
   ): Promise<LessonResponse> {
     const lesson = await this.findOrFail(lessonId);
     await OrganizationAccessService.assertManageAccess(
@@ -258,6 +259,10 @@ console.log('input.title ?? materials[0].title', input.title?.trim().length , ma
     }
 
     await this.assertLessonMaterialsReady(lesson._id.toString());
+
+    if (input?.studentLevel) {
+      lesson.studentLevel = input.studentLevel;
+    }
 
     lesson.generationStatus = ProcessingStatus.PENDING;
     lesson.errorMessage = undefined;

@@ -84,7 +84,7 @@ export function buildLessonContext(lesson: {
   examples: string[];
   content?: string;
 }): string {
-  return [
+  const context = [
     `# ${lesson.title}`,
     lesson.summary ? `Summary: ${lesson.summary}` : "",
     lesson.objectives.length
@@ -100,4 +100,6 @@ export function buildLessonContext(lesson: {
   ]
     .filter(Boolean)
     .join("\n\n");
+
+  return context.slice(0, 16000);
 }

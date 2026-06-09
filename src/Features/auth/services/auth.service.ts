@@ -64,7 +64,7 @@ export class AuthService {
     const activeUser = refreshed ?? user;
 
     const tokens = await this.issueTokens(activeUser);
-    await sendMail(activeUser.email, "Welcome to AI Tutor", welcomeEmail(activeUser.firstName));
+    await sendMail(activeUser.email, "Welcome to Adesia", welcomeEmail(activeUser.firstName));
 
     return { user: await enrichSafeUser(activeUser), tokens };
   }

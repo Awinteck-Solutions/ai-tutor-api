@@ -4,6 +4,10 @@ import { Status } from "../../../shared/enums/status.enum";
 import { AppError } from "../../../shared/errors/AppError";
 import { JwtPayload } from "../../../types/express.d";
 import { PROMPTS } from "../../../services/ai/prompt.templates";
+import {
+  normalizeStudentLevel,
+  warnIfLessonStructureThin,
+} from "../../../services/ai/lessonPrompt.shared";
 import { AIService } from "../../../services/ai/ai.service";
 import {
   enqueueJob,
@@ -22,6 +26,7 @@ import {
 import Lesson from "../../lesson/models/lesson.model";
 import LessonMaterial from "../../lesson/models/lessonMaterial.model";
 import Quiz from "../../quiz/models/quiz.model";
+import QuizQuestion from "../../quiz/models/quizQuestion.model";
 import Flashcard from "../../flashcard/models/flashcard.model";
 import FlashcardSet from "../../flashcard/models/flashcardSet.model";
 import Material from "../../material/models/material.model";
@@ -32,10 +37,16 @@ import {
   UploadYoutubeInput,
 } from "../../material/dto/material.dto";
 import { MaterialService } from "../../material/services/material.service";
-import { enqueueLessonGeneration } from "../../lesson/services/lessonGeneration.service";
+import {
+  enqueueLessonGeneration,
+  enqueueLessonPracticeAssets,
+} from "../../lesson/services/lessonGeneration.service";
 import { getLessonMaterialIds } from "../../../shared/services/content.service";
 import { SelfStudyPlacementService } from "../../../shared/services/selfStudyPlacement.service";
 import { StudentPlanLimitService } from "../../../shared/services/studentPlanLimit.service";
+import { getAIUserMessage } from "../../../shared/utils/aiErrorMapper";
+import { extractNextLessonSuggestion } from "../../../shared/utils/lessonContent.utils";
+import LessonGroup from "../../lesson/models/lessonGroup.model";
 
 interface GeneratedLesson {
   title: string;
@@ -51,7 +62,12 @@ export class StudentSelfStudyService {
   static async createPersonalLesson(
     user: JwtPayload,
     organizationId: string,
-    input: { title?: string; prompt: string }
+    input: {
+      title?: string;
+      prompt: string;
+      studentLevel?: "beginner" | "intermediate" | "advanced";
+      groupId?: string;
+    }
   ) {
     await AccessControlService.assertOrgRead(user, organizationId);
     await StudentPlanLimitService.assertLessonCreation(organizationId, user.sub);
@@ -65,12 +81,30 @@ export class StudentSelfStudyService {
       organizationId
     );
 
+    const studentLevel = normalizeStudentLevel(input.studentLevel);
+
+    let groupId: mongoose.Types.ObjectId | undefined;
+    if (input.groupId?.trim()) {
+      const group = await LessonGroup.findOne({
+        _id: input.groupId.trim(),
+        organizationId: new mongoose.Types.ObjectId(organizationId),
+        ownerId: new mongoose.Types.ObjectId(user.sub),
+        status: Status.ACTIVE,
+      });
+      if (!group) {
+        throw new AppError("Lesson group not found", 404);
+      }
+      groupId = group._id;
+    }
+
     const lesson = await Lesson.create({
       organizationId: new mongoose.Types.ObjectId(organizationId),
       createdBy: new mongoose.Types.ObjectId(user.sub),
       ownerId: new mongoose.Types.ObjectId(user.sub),
       isPersonal: true,
       title: input.title?.trim() || "My lesson",
+      studentLevel,
+      groupId,
       topicId: placement.topicId,
       subjectId: placement.subjectId,
       academicYearId: placement.academicYearId,
@@ -80,8 +114,19 @@ export class StudentSelfStudyService {
 
     try {
       const generated = await AIService.generateJSON<GeneratedLesson>(
-        PROMPTS.lessonFromPrompt(prompt, input.title)
+        PROMPTS.lessonFromPrompt(prompt, {
+          titleHint: input.title,
+          studentLevel,
+        }),
+        {
+          organizationId,
+          userId: user.sub,
+          operation: "personal_lesson_generation",
+        },
+        { maxTokens: 8192 }
       );
+
+      warnIfLessonStructureThin(generated);
 
       lesson.title = generated.title || lesson.title;
       lesson.summary = generated.summary;
@@ -93,21 +138,73 @@ export class StudentSelfStudyService {
       lesson.generationStatus = ProcessingStatus.COMPLETED;
       await lesson.save();
 
+      if (groupId) {
+        const maxOrder = await Lesson.findOne({
+          groupId,
+          _id: { $ne: lesson._id },
+          status: Status.ACTIVE,
+        })
+          .sort({ groupOrder: -1 })
+          .select("groupOrder");
+        lesson.groupOrder = (maxOrder?.groupOrder ?? -1) + 1;
+        await lesson.save();
+      }
+
+      try {
+        await enqueueLessonPracticeAssets(lesson._id.toString(), lesson.title);
+      } catch (queueError) {
+        console.error(
+          `[AI] Failed to queue practice assets for lesson ${lesson._id}:`,
+          queueError
+        );
+      }
+
       return {
         id: lesson._id.toString(),
         title: lesson.title,
         summary: lesson.summary,
         isPersonal: true,
         generationStatus: lesson.generationStatus,
+        groupId: groupId?.toString() ?? null,
       };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Lesson generation failed";
+      const message = getAIUserMessage(error);
       lesson.generationStatus = ProcessingStatus.FAILED;
       lesson.errorMessage = message;
       await lesson.save();
-      throw new AppError(message, 500);
+      throw error instanceof AppError ? error : new AppError(message, 503);
     }
+  }
+
+  static async createNextLessonFromSuggestion(
+    user: JwtPayload,
+    organizationId: string,
+    lessonId: string,
+    input?: { prompt?: string; studentLevel?: "beginner" | "intermediate" | "advanced" }
+  ) {
+    const source = await this.assertLessonAccess(user, organizationId, lessonId);
+
+    if (source.generationStatus !== ProcessingStatus.COMPLETED) {
+      throw new AppError("Finish the current lesson before creating the next one", 422);
+    }
+
+    const suggestion =
+      input?.prompt?.trim() ||
+      extractNextLessonSuggestion(source.content) ||
+      "";
+
+    if (suggestion.length < 10) {
+      throw new AppError(
+        "This lesson does not include a next-step suggestion yet. Add a learning goal manually.",
+        422
+      );
+    }
+
+    return this.createPersonalLesson(user, organizationId, {
+      prompt: suggestion,
+      studentLevel: input?.studentLevel ?? source.studentLevel,
+      groupId: source.groupId?.toString(),
+    });
   }
 
   static async uploadPdf(
@@ -218,7 +315,12 @@ export class StudentSelfStudyService {
   static async createPersonalLessonFromMaterials(
     user: JwtPayload,
     organizationId: string,
-    input: { title?: string; materialIds: string[] }
+    input: {
+      title?: string;
+      materialIds: string[];
+      studentLevel?: "beginner" | "intermediate" | "advanced";
+      groupId?: string;
+    }
   ) {
     await AccessControlService.assertOrgRead(user, organizationId);
     await StudentPlanLimitService.assertLessonCreation(organizationId, user.sub);
@@ -232,6 +334,20 @@ export class StudentSelfStudyService {
       organizationId
     );
     const orgOid = new mongoose.Types.ObjectId(organizationId);
+
+    let groupId: mongoose.Types.ObjectId | undefined;
+    if (input.groupId?.trim()) {
+      const group = await LessonGroup.findOne({
+        _id: input.groupId.trim(),
+        organizationId: orgOid,
+        ownerId: new mongoose.Types.ObjectId(user.sub),
+        status: Status.ACTIVE,
+      });
+      if (!group) {
+        throw new AppError("Lesson group not found", 404);
+      }
+      groupId = group._id;
+    }
 
     const materials = await Material.find({
       _id: { $in: materialIds },
@@ -252,6 +368,8 @@ export class StudentSelfStudyService {
       materialIds.map((id, index) => [id, index])
     );
 
+    const studentLevel = normalizeStudentLevel(input.studentLevel);
+
     const lesson = await Lesson.create({
       organizationId: orgOid,
       topicId: placement.topicId,
@@ -260,6 +378,8 @@ export class StudentSelfStudyService {
       createdBy: new mongoose.Types.ObjectId(user.sub),
       ownerId: new mongoose.Types.ObjectId(user.sub),
       isPersonal: true,
+      studentLevel,
+      groupId,
       title:
         input.title?.trim() ||
         materials[0].title ||
@@ -285,6 +405,16 @@ export class StudentSelfStudyService {
       );
       lesson.generationStatus = ProcessingStatus.QUEUED;
       lesson.jobId = jobId;
+      if (groupId) {
+        const maxOrder = await Lesson.findOne({
+          groupId,
+          _id: { $ne: lesson._id },
+          status: Status.ACTIVE,
+        })
+          .sort({ groupOrder: -1 })
+          .select("groupOrder");
+        lesson.groupOrder = (maxOrder?.groupOrder ?? -1) + 1;
+      }
       await lesson.save();
     } catch {
       lesson.generationStatus = ProcessingStatus.FAILED;
@@ -323,6 +453,41 @@ export class StudentSelfStudyService {
     await MaterialService.delete(user, materialId);
 
     return { id: materialId, message: "Material deleted" };
+  }
+
+  static async deletePersonalLesson(
+    user: JwtPayload,
+    organizationId: string,
+    lessonId: string
+  ) {
+    const lesson = await this.assertLessonAccess(user, organizationId, lessonId);
+
+    if (!lesson.isPersonal || lesson.ownerId?.toString() !== user.sub) {
+      throw new AppError("You can only delete your own self-learn lessons", 403);
+    }
+
+    const quizzes = await Quiz.find({ lessonId: lesson._id });
+    for (const quiz of quizzes) {
+      await QuizQuestion.deleteMany({ quizId: quiz._id });
+      quiz.status = Status.DELETED;
+      await quiz.save();
+    }
+
+    const flashcardSets = await FlashcardSet.find({ lessonId: lesson._id });
+    for (const set of flashcardSets) {
+      await Flashcard.deleteMany({ flashcardSetId: set._id });
+      set.status = Status.DELETED;
+      await set.save();
+    }
+
+    await Flashcard.deleteMany({ lessonId: lesson._id });
+    await LessonMaterial.deleteMany({ lessonId: lesson._id });
+    lesson.status = Status.DELETED;
+    lesson.groupId = undefined;
+    lesson.groupOrder = 0;
+    await lesson.save();
+
+    return { id: lessonId, message: "Lesson deleted" };
   }
 
   static async addMaterialsToPersonalLesson(
@@ -571,7 +736,10 @@ export class StudentSelfStudyService {
     user: JwtPayload,
     organizationId: string,
     lessonId: string,
-    input?: { prompt?: string }
+    input?: {
+      prompt?: string;
+      studentLevel?: "beginner" | "intermediate" | "advanced";
+    }
   ) {
     const lesson = await this.assertLessonAccess(
       user,
@@ -596,6 +764,10 @@ export class StudentSelfStudyService {
         "Lesson cannot be reprocessed while it is being generated",
         422
       );
+    }
+
+    if (input?.studentLevel) {
+      lesson.studentLevel = normalizeStudentLevel(input.studentLevel);
     }
 
     const materialIds = await getLessonMaterialIds(lessonId);
@@ -637,6 +809,7 @@ export class StudentSelfStudyService {
       return {
         id: lesson._id.toString(),
         title: lesson.title,
+        studentLevel: lesson.studentLevel,
         generationStatus: lesson.generationStatus,
         hasSourceMaterials: true,
         message:
@@ -660,8 +833,19 @@ export class StudentSelfStudyService {
 
     try {
       const generated = await AIService.generateJSON<GeneratedLesson>(
-        PROMPTS.lessonFromPrompt(prompt, lesson.title)
+        PROMPTS.lessonFromPrompt(prompt, {
+          titleHint: lesson.title,
+          studentLevel: lesson.studentLevel,
+        }),
+        {
+          organizationId,
+          userId: user.sub,
+          operation: "personal_lesson_regeneration",
+        },
+        { maxTokens: 8192 }
       );
+
+      warnIfLessonStructureThin(generated);
 
       lesson.title = generated.title || lesson.title;
       lesson.summary = generated.summary;
@@ -673,6 +857,15 @@ export class StudentSelfStudyService {
       lesson.generationStatus = ProcessingStatus.COMPLETED;
       await lesson.save();
 
+      try {
+        await enqueueLessonPracticeAssets(lesson._id.toString(), lesson.title);
+      } catch (queueError) {
+        console.error(
+          `[AI] Failed to queue practice assets for regenerated lesson ${lesson._id}:`,
+          queueError
+        );
+      }
+
       return {
         id: lesson._id.toString(),
         title: lesson.title,
@@ -681,12 +874,11 @@ export class StudentSelfStudyService {
         message: "Lesson regenerated successfully",
       };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Lesson generation failed";
+      const message = getAIUserMessage(error);
       lesson.generationStatus = ProcessingStatus.FAILED;
       lesson.errorMessage = message;
       await lesson.save();
-      throw new AppError(message, 500);
+      throw error instanceof AppError ? error : new AppError(message, 503);
     }
   }
 
@@ -698,6 +890,7 @@ export class StudentSelfStudyService {
       limit?: number;
       search?: string;
       generationStatus?: string;
+      groupId?: string;
     } = {}
   ) {
     await AccessControlService.assertOrgRead(user, organizationId);
@@ -714,17 +907,42 @@ export class StudentSelfStudyService {
       filter.generationStatus = query.generationStatus;
     }
 
+    if (query.groupId === "ungrouped") {
+      filter.$or = [{ groupId: { $exists: false } }, { groupId: null }];
+    } else if (query.groupId?.trim()) {
+      filter.groupId = new mongoose.Types.ObjectId(query.groupId.trim());
+    }
+
     const searchFilter = buildTextSearchFilter(query.search, ["title", "summary"]);
     if (searchFilter) Object.assign(filter, searchFilter);
 
     const [lessons, total] = await Promise.all([
       Lesson.find(filter)
-        .sort({ createdAt: -1 })
+        .sort({ groupOrder: 1, createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .select("title summary generationStatus createdAt errorMessage"),
+        .select(
+          "title summary generationStatus createdAt errorMessage groupId groupOrder studentLevel"
+        ),
       Lesson.countDocuments(filter),
     ]);
+
+    const groupIds = [
+      ...new Set(
+        lessons
+          .map((l) => l.groupId?.toString())
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const groups = groupIds.length
+      ? await LessonGroup.find({
+          _id: { $in: groupIds },
+          status: Status.ACTIVE,
+        }).select("title")
+      : [];
+    const groupTitleMap = new Map(
+      groups.map((g) => [g._id.toString(), g.title])
+    );
 
     return {
       items: lessons.map((l) => ({
@@ -733,6 +951,12 @@ export class StudentSelfStudyService {
         summary: l.summary,
         generationStatus: l.generationStatus,
         errorMessage: l.errorMessage,
+        studentLevel: l.studentLevel,
+        groupId: l.groupId?.toString() ?? null,
+        groupTitle: l.groupId
+          ? groupTitleMap.get(l.groupId.toString()) ?? null
+          : null,
+        groupOrder: l.groupOrder ?? 0,
         createdAt: l.createdAt,
       })),
       meta: buildPaginationMeta(total, page, limit),
@@ -808,10 +1032,14 @@ export class StudentSelfStudyService {
       lesson: {
         id: lesson._id.toString(),
         title: lesson.title,
+        studentLevel: lesson.studentLevel ?? "intermediate",
         generationStatus: lesson.generationStatus,
         isPersonal: lesson.isPersonal,
         errorMessage: lesson.errorMessage,
         hasSourceMaterials: materialIds.length > 0,
+        groupId: lesson.groupId?.toString() ?? null,
+        content: lesson.content,
+        nextLessonSuggestion: extractNextLessonSuggestion(lesson.content),
       },
       sourceMaterials: orderedSourceMaterials.map(toMaterialResponse),
       flashcardCount,

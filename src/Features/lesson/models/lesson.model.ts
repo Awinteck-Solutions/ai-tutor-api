@@ -15,6 +15,9 @@ export interface ILesson extends Document {
   isPersonal?: boolean;
   ownerId?: Types.ObjectId;
   title: string;
+  studentLevel?: "beginner" | "intermediate" | "advanced";
+  groupId?: Types.ObjectId;
+  groupOrder?: number;
   summary?: string;
   objectives: string[];
   concepts: string[];
@@ -68,6 +71,13 @@ const lessonSchema = new Schema<ILesson>(
     isPersonal: { type: Boolean, default: false, index: true },
     ownerId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     title: { type: String, required: true, trim: true },
+    studentLevel: {
+      type: String,
+      enum: ["beginner", "intermediate", "advanced"],
+      default: "intermediate",
+    },
+    groupId: { type: Schema.Types.ObjectId, ref: "LessonGroup", index: true },
+    groupOrder: { type: Number, default: 0 },
     summary: { type: String },
     objectives: [{ type: String }],
     concepts: [{ type: String }],

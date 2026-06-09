@@ -20,9 +20,11 @@ import { env, validateProductionEnv } from "./config/env";
 import { Logger } from "./shared/services/logger";
 import { closeQueues } from "./services/queue/job.queue";
 import { R2StorageService } from "./services/storage/r2.service";
+import { HealthMonitorService } from "./Features/platform/services/healthMonitor.service";
 
 const app = express();
 
+app.set("trust proxy", true);
 app.use(...securityMiddleware);
 app.use(apiRateLimiter);
 app.use(bodyParser.json({ limit: "10mb", strict: false }));
@@ -66,6 +68,7 @@ async function bootstrap() {
   await connectDatabase();
   await R2StorageService.warmUp();
   startWorkers();
+  HealthMonitorService.startScheduler();
 
   server = app.listen(env.port, () => {
     Logger.info(`Server running on port ${env.port}`, { env: env.nodeEnv });

@@ -85,6 +85,50 @@ export class ChatService {
     return this.enrichSessions(sessions);
   }
 
+  static async listLessonSessions(
+    user: JwtPayload,
+    organizationId: string,
+    lessonId?: string
+  ): Promise<ChatSessionResponse[]> {
+    await OrganizationAccessService.assertReadAccess(user, organizationId);
+
+    const filter: Record<string, unknown> = {
+      userId: user.sub,
+      organizationId,
+      status: Status.ACTIVE,
+      lessonId: { $exists: true, $ne: null },
+    };
+    if (lessonId) {
+      filter.lessonId = lessonId;
+    }
+
+    const sessions = await ChatSession.find(filter)
+      .sort({ updatedAt: -1 })
+      .limit(100);
+
+    const enriched = await this.enrichSessions(sessions);
+    const lessonIds = [
+      ...new Set(
+        sessions
+          .map((s) => s.lessonId?.toString())
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const lessons = lessonIds.length
+      ? await Lesson.find({ _id: { $in: lessonIds } }).select("title")
+      : [];
+    const titleMap = new Map(
+      lessons.map((l) => [l._id.toString(), l.title])
+    );
+
+    return enriched.map((session) => ({
+      ...session,
+      lessonTitle: session.lessonId
+        ? titleMap.get(session.lessonId) ?? "Lesson"
+        : undefined,
+    }));
+  }
+
   static async renameSession(
     user: JwtPayload,
     sessionId: string,

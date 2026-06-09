@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { ProcessingStatus } from "../../../shared/enums/processingStatus.enum";
 import { Status } from "../../../shared/enums/status.enum";
+import { AppError } from "../../../shared/errors/AppError";
 import { LessonProgressStatus } from "../../../shared/enums/progress.enum";
 import { AccessControlService } from "../../../shared/services/accessControl.service";
 import { JwtPayload } from "../../../types/express.d";
@@ -8,6 +9,7 @@ import { EnrollmentScopeService } from "../../../shared/services/enrollmentScope
 import Subject from "../../academic/models/subject.model";
 import Topic from "../../academic/models/topic.model";
 import Lesson from "../../lesson/models/lesson.model";
+import LessonGroup from "../../lesson/models/lessonGroup.model";
 import LessonProgress from "../../progress/models/lessonProgress.model";
 import FlashcardProgress from "../../progress/models/flashcardProgress.model";
 import Quiz from "../../quiz/models/quiz.model";
@@ -27,6 +29,7 @@ import StudentProgress from "../../progress/models/studentProgress.model";
 import { AchievementService } from "../../achievements/services/achievement.service";
 import { XpService } from "../../xp/services/xp.service";
 import { StudentPlanLimitService } from "../../../shared/services/studentPlanLimit.service";
+import { extractNextLessonSuggestion } from "../../../shared/utils/lessonContent.utils";
 
 export class StudentPortalService {
   static async getDashboard(user: JwtPayload, organizationId: string) {
@@ -269,6 +272,22 @@ export class StudentPortalService {
     });
     const progressMap = new Map(progress.map((p) => [p.lessonId.toString(), p]));
 
+    const groupIds = [
+      ...new Set(
+        personalLessons
+          .map((l) => l.groupId?.toString())
+          .filter(Boolean) as string[]
+      ),
+    ];
+    const groups = groupIds.length
+      ? await LessonGroup.find({ _id: { $in: groupIds }, status: Status.ACTIVE }).select(
+          "title"
+        )
+      : [];
+    const groupTitleMap = new Map(
+      groups.map((g) => [g._id.toString(), g.title])
+    );
+
     return lessons.map((l) => ({
       id: l._id.toString(),
       title: l.title,
@@ -276,6 +295,11 @@ export class StudentPortalService {
       topicId: l.topicId?.toString() ?? "",
       subjectId: l.subjectId?.toString() ?? "",
       isPersonal: Boolean(l.isPersonal),
+      groupId: l.groupId?.toString() ?? null,
+      groupTitle: l.groupId
+        ? groupTitleMap.get(l.groupId.toString()) ?? null
+        : null,
+      groupOrder: l.groupOrder ?? 0,
       progress: progressMap.get(l._id.toString()) ?? null,
     }));
   }
@@ -322,8 +346,21 @@ export class StudentPortalService {
         .map((q) => QuizService.getById(user, q._id.toString(), false))
     );
 
+    let groupTitle: string | null = null;
+    if (lesson.groupId) {
+      const group = await LessonGroup.findOne({
+        _id: lesson.groupId,
+        status: Status.ACTIVE,
+      }).select("title");
+      groupTitle = group?.title ?? null;
+    }
+
     return {
-      lesson,
+      lesson: {
+        ...lesson,
+        groupTitle,
+        nextLessonSuggestion: extractNextLessonSuggestion(lesson.content),
+      },
       flashcards,
       quiz: quizDataList[0] ?? null,
       quizzes: quizDataList,
@@ -867,16 +904,20 @@ export class StudentPortalService {
     options?: {
       sessionId?: string;
       lessonId?: string;
-      topicId?: string;
-      materialId?: string;
-      quizId?: string;
-      flashcardId?: string;
     }
   ) {
     await AccessControlService.assertOrgRead(user, organizationId);
     await StudentPlanLimitService.assertChatMessage(organizationId, user.sub);
 
-    if (options?.sessionId) {
+    if (!options?.lessonId) {
+      throw new AppError("Select a lesson to chat about", 400);
+    }
+
+    if (options.sessionId) {
+      const session = await ChatService.getSession(user, options.sessionId);
+      if (session.lessonId !== options.lessonId) {
+        throw new AppError("Chat session does not match this lesson", 400);
+      }
       const response = await ChatService.sendMessage(user, options.sessionId, {
         message,
       });
@@ -887,12 +928,8 @@ export class StudentPortalService {
       user,
       normalizeCreateSessionInput({
         organizationId,
-        lessonId: options?.lessonId,
-        topicId: options?.topicId,
-        materialId: options?.materialId,
-        quizId: options?.quizId,
-        flashcardId: options?.flashcardId,
-        title: "Student Tutor",
+        lessonId: options.lessonId,
+        title: "Lesson chat",
       })
     );
     const response = await ChatService.sendMessage(user, session.id, { message });

@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { AppError } from "../shared/errors/AppError";
+import { sanitizeErrorMessageForClient } from "../shared/utils/aiErrorMapper";
 import { ApiResponse } from "../shared/utils/apiResponse";
 
 export const notFoundHandler = (
@@ -17,7 +18,19 @@ export const errorHandler = (
   _next: NextFunction
 ): void => {
   if (error instanceof AppError) {
-    ApiResponse.error(res, error.message, error.statusCode, error.details);
+    ApiResponse.error(
+      res,
+      sanitizeErrorMessageForClient(error.message),
+      error.statusCode,
+      error.details
+    );
+    return;
+  }
+
+  const sanitized = sanitizeErrorMessageForClient(error.message);
+  if (sanitized !== error.message) {
+    console.error("Unhandled AI provider error:", error);
+    ApiResponse.error(res, sanitized, 503);
     return;
   }
 

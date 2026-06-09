@@ -1,6 +1,12 @@
 import nodemailer from "nodemailer";
 import { env } from "../config/env";
 
+export {
+  passwordResetEmail,
+  welcomeEmail,
+  inviteEmail,
+} from "./emailTemplates";
+
 const transporter =
   env.smtp.host && env.smtp.user && env.smtp.pass
     ? nodemailer.createTransport({
@@ -30,36 +36,4 @@ export async function sendMail(
     subject,
     html,
   });
-}
-
-export function passwordResetEmail(name: string, resetUrl: string): string {
-  return `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Password Reset Request</h2>
-      <p>Hi ${name},</p>
-      <p>We received a request to reset your password. Click the link below to set a new password:</p>
-      <p><a href="${resetUrl}">Reset Password</a></p>
-      <p>This link expires in 1 hour.</p>
-    </div>
-  `;
-}
-
-export function welcomeEmail(name: string): string {
-  return `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Welcome to AI Tutor!</h2>
-      <p>Hi ${name},</p>
-      <p>Your account has been created successfully.</p>
-    </div>
-  `;
-}
-
-export function inviteEmail(orgName: string, inviteUrl: string, role: string): string {
-  return `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>You're invited to ${orgName}</h2>
-      <p>You have been invited as a <strong>${role}</strong>.</p>
-      <p><a href="${inviteUrl}">Accept Invitation</a></p>
-    </div>
-  `;
 }

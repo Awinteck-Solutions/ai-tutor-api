@@ -6,6 +6,7 @@ export interface GenerateLessonInput {
   materialIds: string[];
   title?: string;
   order?: number;
+  studentLevel?: "beginner" | "intermediate" | "advanced";
 }
 
 export interface LessonMaterialRef {
@@ -24,6 +25,9 @@ export interface LessonResponse {
   createdBy: string;
   isPersonal?: boolean;
   title: string;
+  studentLevel?: "beginner" | "intermediate" | "advanced";
+  groupId?: string | null;
+  groupOrder?: number;
   summary?: string;
   objectives: string[];
   concepts: string[];
@@ -70,6 +74,9 @@ export function toLessonResponse(
     createdBy: lesson.createdBy?.toString() ?? "",
     isPersonal: Boolean(lesson.isPersonal),
     title: lesson.title,
+    studentLevel: lesson.studentLevel ?? "intermediate",
+    groupId: lesson.groupId?.toString() ?? null,
+    groupOrder: lesson.groupOrder ?? 0,
     summary: lesson.summary,
     objectives: lesson.objectives,
     concepts: lesson.concepts,

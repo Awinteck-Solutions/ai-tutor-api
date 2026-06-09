@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
 import { env } from "../../../config/env";
-import { ProcessingStatus } from "../../../shared/enums/processingStatus.enum";
+import { getAIUserMessage } from "../../../shared/utils/aiErrorMapper";
 import { MaterialProcessingStage } from "../../../shared/enums/materialProcessingStage.enum";
+import { ProcessingStatus } from "../../../shared/enums/processingStatus.enum";
 import { MaterialType } from "../../../shared/enums/materialType.enum";
 import { PROMPTS } from "../../../services/ai/prompt.templates";
 import { AIService } from "../../../services/ai/ai.service";
@@ -189,8 +190,7 @@ export class MaterialProcessingService {
         data: { materialId: material._id.toString() },
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown processing error";
+      const message = getAIUserMessage(error);
 
       material.processingStatus = ProcessingStatus.FAILED;
       material.processingStage = MaterialProcessingStage.FAILED;

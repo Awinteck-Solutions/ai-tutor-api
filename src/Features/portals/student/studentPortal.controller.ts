@@ -5,10 +5,12 @@ import { QuizService } from "../../quiz/services/quiz.service";
 import { ChatService } from "../../chat/services/chat.service";
 import { StudentPortalService } from "./studentPortal.service";
 import { StudentSelfStudyService } from "./studentSelfStudy.service";
+import { StudentLessonGroupService } from "./studentLessonGroup.service";
 import { StudentNoteService } from "../../notes/services/studentNote.service";
 import { MilestoneService } from "../../milestones/services/milestone.service";
 import User from "../../auth/models/user.model";
 import { StudentWorkspaceService } from "../../../shared/services/studentWorkspace.service";
+import { resolveStudentOrganizationId } from "./studentOrganization.util";
 
 export class StudentPortalController {
   static async dashboard(req: Request, res: Response): Promise<Response> {
@@ -122,10 +124,6 @@ export class StudentPortalController {
       {
         sessionId: req.body.sessionId,
         lessonId: req.body.lessonId,
-        topicId: req.body.topicId,
-        materialId: req.body.materialId,
-        quizId: req.body.quizId,
-        flashcardId: req.body.flashcardId,
       }
     );
     return ApiResponse.success(res, message, "Chat response");
@@ -138,7 +136,12 @@ export class StudentPortalController {
     const data = await StudentSelfStudyService.createPersonalLesson(
       req.currentUser!,
       req.body.organizationId,
-      { title: req.body.title, prompt: req.body.prompt }
+      {
+        title: req.body.title,
+        prompt: req.body.prompt,
+        studentLevel: req.body.studentLevel,
+        groupId: req.body.groupId,
+      }
     );
     return ApiResponse.success(res, data, "Personal lesson created", 201);
   }
@@ -248,6 +251,8 @@ export class StudentPortalController {
       {
         title: req.body.title,
         materialIds: req.body.materialIds,
+        studentLevel: req.body.studentLevel,
+        groupId: req.body.groupId,
       }
     );
     return ApiResponse.success(
@@ -270,6 +275,7 @@ export class StudentPortalController {
         limit: req.query.limit ? Number(req.query.limit) : undefined,
         search: req.query.search as string | undefined,
         generationStatus: req.query.generationStatus as string | undefined,
+        groupId: req.query.groupId as string | undefined,
       }
     );
     return ApiResponse.success(res, data, "Personal lessons retrieved");
@@ -292,9 +298,21 @@ export class StudentPortalController {
       req.currentUser!,
       req.query.organizationId as string,
       req.params.id,
-      { prompt: req.body.prompt }
+      { prompt: req.body.prompt, studentLevel: req.body.studentLevel }
     );
     return ApiResponse.success(res, data, data.message ?? "Lesson reprocessing started");
+  }
+
+  static async deletePersonalLesson(
+    req: Request,
+    res: Response
+  ): Promise<Response> {
+    const data = await StudentSelfStudyService.deletePersonalLesson(
+      req.currentUser!,
+      req.query.organizationId as string,
+      req.params.id
+    );
+    return ApiResponse.success(res, data, data.message);
   }
 
   static async generateFlashcards(
@@ -372,9 +390,11 @@ export class StudentPortalController {
   }
 
   static async chatHistory(req: Request, res: Response): Promise<Response> {
-    const sessions = await ChatService.listSessions(
+    const lessonId = req.query.lessonId as string | undefined;
+    const sessions = await ChatService.listLessonSessions(
       req.currentUser!,
-      req.query.organizationId as string
+      req.query.organizationId as string,
+      lessonId
     );
     return ApiResponse.success(res, sessions, "Chat sessions retrieved");
   }
@@ -494,5 +514,85 @@ export class StudentPortalController {
       scope
     );
     return ApiResponse.success(res, data, "Leaderboard retrieved");
+  }
+
+  static async listLessonGroups(req: Request, res: Response): Promise<Response> {
+    const organizationId = await resolveStudentOrganizationId(req);
+    const data = await StudentLessonGroupService.list(
+      req.currentUser!,
+      organizationId
+    );
+    return ApiResponse.success(res, { ...data, organizationId }, "Lesson groups retrieved");
+  }
+
+  static async createLessonGroup(req: Request, res: Response): Promise<Response> {
+    const organizationId = await resolveStudentOrganizationId(req);
+    const data = await StudentLessonGroupService.create(
+      req.currentUser!,
+      organizationId,
+      { title: req.body.title, description: req.body.description }
+    );
+    return ApiResponse.success(
+      res,
+      { ...data, organizationId },
+      "Lesson group created",
+      201
+    );
+  }
+
+  static async updateLessonGroup(req: Request, res: Response): Promise<Response> {
+    const organizationId = await resolveStudentOrganizationId(req);
+    const data = await StudentLessonGroupService.update(
+      req.currentUser!,
+      organizationId,
+      req.params.id,
+      {
+        title: req.body.title,
+        description: req.body.description,
+        order: req.body.order,
+      }
+    );
+    return ApiResponse.success(res, data, "Lesson group updated");
+  }
+
+  static async deleteLessonGroup(req: Request, res: Response): Promise<Response> {
+    const organizationId = await resolveStudentOrganizationId(req);
+    const data = await StudentLessonGroupService.delete(
+      req.currentUser!,
+      organizationId,
+      req.params.id
+    );
+    return ApiResponse.success(res, data, data.message);
+  }
+
+  static async listGroupLessons(req: Request, res: Response): Promise<Response> {
+    const organizationId = await resolveStudentOrganizationId(req);
+    const data = await StudentLessonGroupService.listGroupLessons(
+      req.currentUser!,
+      organizationId,
+      req.params.id
+    );
+    return ApiResponse.success(res, data, "Group lessons retrieved");
+  }
+
+  static async assignLessonGroup(req: Request, res: Response): Promise<Response> {
+    const organizationId = await resolveStudentOrganizationId(req);
+    const data = await StudentLessonGroupService.assignLesson(
+      req.currentUser!,
+      organizationId,
+      req.params.id,
+      { groupId: req.body.groupId, groupOrder: req.body.groupOrder }
+    );
+    return ApiResponse.success(res, data, data.message);
+  }
+
+  static async createNextLesson(req: Request, res: Response): Promise<Response> {
+    const data = await StudentSelfStudyService.createNextLessonFromSuggestion(
+      req.currentUser!,
+      req.query.organizationId as string,
+      req.params.id,
+      { prompt: req.body.prompt, studentLevel: req.body.studentLevel }
+    );
+    return ApiResponse.success(res, data, "Next lesson created", 201);
   }
 }

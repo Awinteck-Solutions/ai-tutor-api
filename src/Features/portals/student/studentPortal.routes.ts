@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { body, query } from "express-validator";
+import { body, query, param } from "express-validator";
 import { authenticate } from "../../../middlewares/authentication.middleware";
 import { authorize } from "../../../middlewares/authorization.middleware";
 import { validate } from "../../../middlewares/validation.middleware";
@@ -9,6 +9,8 @@ import { Role } from "../../../shared/enums/roles.enum";
 import { FlashcardReviewResult } from "../../../shared/enums/progress.enum";
 import {
   organizationIdQueryValidator,
+  optionalOrganizationIdQueryValidator,
+  optionalOrganizationIdBodyValidator,
   lessonIdParamValidator,
   materialIdParamValidator,
   quizIdParamValidator,
@@ -209,8 +211,16 @@ router.get(
     query("limit").optional().isInt({ min: 1, max: 50 }),
     query("search").optional().trim().isLength({ max: 200 }),
     query("generationStatus").optional().trim(),
+    query("groupId").optional().trim(),
   ]),
   asyncHandler(StudentPortalController.listPersonalLessons)
+);
+
+router.delete(
+  "/self-study/lessons/:id",
+  ...studentAuth,
+  validate([...organizationIdQueryValidator, ...lessonIdParamValidator]),
+  asyncHandler(StudentPortalController.deletePersonalLesson)
 );
 
 router.get(
@@ -270,6 +280,76 @@ router.post(
   asyncHandler(StudentPortalController.generateQuiz)
 );
 
+router.post(
+  "/self-study/lessons/:id/next",
+  ...studentAuth,
+  validate([
+    ...organizationIdQueryValidator,
+    ...lessonIdParamValidator,
+    body("prompt").optional().trim().isLength({ min: 10, max: 8000 }),
+    body("studentLevel").optional().isIn(["beginner", "intermediate", "advanced"]),
+  ]),
+  asyncHandler(StudentPortalController.createNextLesson)
+);
+
+router.get(
+  "/lesson-groups",
+  ...studentAuth,
+  validate(optionalOrganizationIdQueryValidator),
+  asyncHandler(StudentPortalController.listLessonGroups)
+);
+
+router.post(
+  "/lesson-groups",
+  ...studentAuth,
+  validate([
+    ...optionalOrganizationIdQueryValidator,
+    ...optionalOrganizationIdBodyValidator,
+    body("title").trim().isLength({ min: 2, max: 120 }),
+    body("description").optional().trim().isLength({ max: 500 }),
+  ]),
+  asyncHandler(StudentPortalController.createLessonGroup)
+);
+
+router.patch(
+  "/lesson-groups/:id",
+  ...studentAuth,
+  validate([
+    ...optionalOrganizationIdQueryValidator,
+    param("id").isMongoId(),
+    body("title").optional().trim().isLength({ min: 2, max: 120 }),
+    body("description").optional().trim().isLength({ max: 500 }),
+    body("order").optional().isInt({ min: 0 }),
+  ]),
+  asyncHandler(StudentPortalController.updateLessonGroup)
+);
+
+router.delete(
+  "/lesson-groups/:id",
+  ...studentAuth,
+  validate([...optionalOrganizationIdQueryValidator, param("id").isMongoId()]),
+  asyncHandler(StudentPortalController.deleteLessonGroup)
+);
+
+router.get(
+  "/lesson-groups/:id/lessons",
+  ...studentAuth,
+  validate([...optionalOrganizationIdQueryValidator, param("id").isMongoId()]),
+  asyncHandler(StudentPortalController.listGroupLessons)
+);
+
+router.patch(
+  "/lessons/:id/group",
+  ...studentAuth,
+  validate([
+    ...optionalOrganizationIdQueryValidator,
+    ...lessonIdParamValidator,
+    body("groupId").optional({ nullable: true }),
+    body("groupOrder").optional().isInt({ min: 0 }),
+  ]),
+  asyncHandler(StudentPortalController.assignLessonGroup)
+);
+
 router.get(
   "/notes",
   ...studentAuth,
@@ -317,12 +397,8 @@ router.post(
   validate([
     body("organizationId").isMongoId(),
     body("message").trim().notEmpty(),
+    body("lessonId").isMongoId().withMessage("lessonId is required"),
     body("sessionId").optional({ nullable: true }).isMongoId(),
-    body("lessonId").optional({ nullable: true }).isMongoId(),
-    body("topicId").optional({ nullable: true }).isMongoId(),
-    body("materialId").optional({ nullable: true }).isMongoId(),
-    body("quizId").optional({ nullable: true }).isMongoId(),
-    body("flashcardId").optional({ nullable: true }).isMongoId(),
   ]),
   asyncHandler(StudentPortalController.chat)
 );
@@ -337,7 +413,10 @@ router.get(
 router.get(
   "/chat/sessions",
   ...studentAuth,
-  validate(organizationIdQueryValidator),
+  validate([
+    ...organizationIdQueryValidator,
+    query("lessonId").optional().isMongoId(),
+  ]),
   asyncHandler(StudentPortalController.chatHistory)
 );
 

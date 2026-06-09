@@ -1,4 +1,5 @@
 import { PROMPTS } from "../../../services/ai/prompt.templates";
+import { warnIfLessonStructureThin } from "../../../services/ai/lessonPrompt.shared";
 import { AIService } from "../../../services/ai/ai.service";
 import {
   enqueueJob,
@@ -20,6 +21,7 @@ import FlashcardSet from "../../flashcard/models/flashcardSet.model";
 import Quiz from "../../quiz/models/quiz.model";
 import QuizQuestion from "../../quiz/models/quizQuestion.model";
 import Lesson from "../models/lesson.model";
+import { getAIUserMessage } from "../../../shared/utils/aiErrorMapper";
 import { normalizeDifficulty } from "../../../shared/enums/difficulty.enum";
 import { normalizeQuizType } from "../../../shared/enums/quizQuestionType.enum";
 
@@ -48,6 +50,13 @@ interface GeneratedQuizQuestion {
   difficulty: string;
 }
 
+export async function enqueueLessonPracticeAssets(
+  lessonId: string,
+  title: string
+): Promise<void> {
+  await LessonGenerationService.enqueuePracticeAssets(lessonId, title);
+}
+
 export class LessonGenerationService {
   static async generate(
     lessonId: string,
@@ -73,8 +82,18 @@ export class LessonGenerationService {
 
       const content = await getMaterialsContentForAI(materialIds);
       const generated = await AIService.generateJSON<GeneratedLesson>(
-        PROMPTS.lessonGeneration(content, lesson.title)
+        PROMPTS.lessonGeneration(content, {
+          titleHint: lesson.title,
+          studentLevel: lesson.studentLevel,
+        }),
+        {
+          organizationId: lesson.organizationId.toString(),
+          operation: "lesson_generation",
+        },
+        { maxTokens: 8192 }
       );
+
+      warnIfLessonStructureThin(generated);
 
       lesson.title = generated.title || lesson.title;
       lesson.summary = generated.summary;
@@ -88,19 +107,27 @@ export class LessonGenerationService {
 
       console.log(`[AI] Lesson ${lessonId} generated successfully`);
 
-      await this.enqueueFlashcards(lessonId, lesson.title);
-      await this.enqueueQuiz(lessonId, lesson.title);
+      await enqueueLessonPracticeAssets(lessonId, lesson.title);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Lesson generation failed";
+      const message = getAIUserMessage(error);
 
       lesson.generationStatus = ProcessingStatus.FAILED;
       lesson.errorMessage = message;
       await lesson.save();
 
-      console.error(`[AI] Lesson ${lessonId} failed:`, message);
-      throw error;
+      console.error(`[AI] Lesson ${lessonId} failed:`, error);
+      throw error instanceof AppError ? error : new AppError(message, 503);
     }
+  }
+
+  static async enqueuePracticeAssets(
+    lessonId: string,
+    title: string
+  ): Promise<void> {
+    await Promise.all([
+      this.enqueueFlashcards(lessonId, title),
+      this.enqueueQuiz(lessonId, title),
+    ]);
   }
 
   private static async enqueueFlashcards(
@@ -238,8 +265,7 @@ export class FlashcardGenerationService {
         `[AI] Generated ${cards.length} flashcards for set ${flashcardSetId} (lesson ${lessonId})`
       );
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Flashcard generation failed";
+      const message = getAIUserMessage(error);
 
       set.generationStatus = ProcessingStatus.FAILED;
       set.errorMessage = message;
@@ -247,9 +273,9 @@ export class FlashcardGenerationService {
 
       console.error(
         `[AI] Flashcard generation failed for set ${flashcardSetId}:`,
-        message
+        error
       );
-      throw error;
+      throw error instanceof AppError ? error : new AppError(message, 503);
     }
   }
 }
@@ -319,15 +345,14 @@ export class QuizGenerationService {
         `[AI] Generated ${questions.length} quiz questions for lesson ${lessonId}`
       );
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Quiz generation failed";
+      const message = getAIUserMessage(error);
 
       quiz.generationStatus = ProcessingStatus.FAILED;
       quiz.errorMessage = message;
       await quiz.save();
 
-      console.error(`[AI] Quiz generation failed for ${lessonId}:`, message);
-      throw error;
+      console.error(`[AI] Quiz generation failed for ${lessonId}:`, error);
+      throw error instanceof AppError ? error : new AppError(message, 503);
     }
   }
 }

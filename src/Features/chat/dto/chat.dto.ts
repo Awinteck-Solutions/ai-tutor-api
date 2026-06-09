@@ -102,11 +102,14 @@ export interface ChatSessionResponse {
   topicId?: string;
   materialId?: string;
   lessonId?: string;
+  lessonTitle?: string;
   quizId?: string;
   flashcardId?: string;
   lastMessageAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  preview?: string;
+  messageCount?: number;
 }
 
 export interface ChatCitation {

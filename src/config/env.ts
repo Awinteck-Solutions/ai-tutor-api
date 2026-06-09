@@ -50,11 +50,17 @@ export const env = {
     url: process.env.REDIS_URL ?? "redis://localhost:6379",
   },
   ai: {
-    provider: (process.env.AI_PROVIDER ?? "openai") as "openai" | "gemini",
+    provider: (process.env.AI_PROVIDER ?? "openai") as
+      | "openai"
+      | "gemini"
+      | "claude",
     openaiApiKey: process.env.OPENAI_API_KEY ?? "",
     geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+    anthropicApiKey:
+      process.env.ANTHROPIC_API_KEY ?? process.env.CLAUDE_API_KEY ?? "",
     openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-    geminiModel: process.env.GEMINI_MODEL ?? "gemini-1.5-flash",
+    geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+    claudeModel: process.env.CLAUDE_MODEL ?? "claude-sonnet-4-6",
     embeddingModel: process.env.EMBEDDING_MODEL ?? "text-embedding-3-small",
     embeddingDimensions: parseInt(
       process.env.EMBEDDING_DIMENSIONS ?? "1536",

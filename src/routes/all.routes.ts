@@ -17,6 +17,7 @@ import studentPortalRoutes from "../Features/portals/student/studentPortal.route
 import parentPortalRoutes from "../Features/portals/parent/parentPortal.routes";
 import orgPortalRoutes from "../Features/portals/organization/orgPortal.routes";
 import auditRoutes from "../Features/audit/routes/audit.routes";
+import platformRoutes from "../Features/platform/routes/platform.routes";
 
 const Router = ExpressRouter();
 
@@ -38,5 +39,6 @@ Router.use("/student", studentPortalRoutes);
 Router.use("/parent", parentPortalRoutes);
 Router.use("/organization", orgPortalRoutes);
 Router.use("/audit", auditRoutes);
+Router.use("/platform", platformRoutes);
 
 export { Router };

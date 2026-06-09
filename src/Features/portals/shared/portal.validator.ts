@@ -1,7 +1,22 @@
-import { query, param } from "express-validator";
+import { query, param, body } from "express-validator";
 
 export const organizationIdQueryValidator = [
   query("organizationId").isMongoId().withMessage("Valid organizationId is required"),
+];
+
+/** For student self-study routes where org may be omitted and resolved server-side. */
+export const optionalOrganizationIdQueryValidator = [
+  query("organizationId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid organizationId is required"),
+];
+
+export const optionalOrganizationIdBodyValidator = [
+  body("organizationId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid organizationId is required"),
 ];
 
 export const studentIdParamValidator = [

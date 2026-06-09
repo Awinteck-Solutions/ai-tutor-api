@@ -36,7 +36,8 @@ export class LessonController {
   static async regenerate(req: Request, res: Response): Promise<Response> {
     const lesson = await LessonService.regenerate(
       req.currentUser!,
-      req.params.id
+      req.params.id,
+      { studentLevel: req.body.studentLevel }
     );
     return ApiResponse.success(res, lesson, "Lesson regeneration queued");
   }
